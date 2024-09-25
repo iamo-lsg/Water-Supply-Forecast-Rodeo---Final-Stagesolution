@@ -35,8 +35,10 @@ This script operates in several key stages:
     - build-essential
     - r-base (R version 4.3)
     - git
-    - python3 python3-dev
-    - gdal-bin libgdal-dev
+    - python3
+    - python3-dev
+    - gdal-bin
+    - libgdal-dev
     
 
 2. Install the R-packages with root access rights (e.g. sudo) through R-script file (sudo Rscript **Rpackages.R**).
