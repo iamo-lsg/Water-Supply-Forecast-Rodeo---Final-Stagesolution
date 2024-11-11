@@ -2,7 +2,7 @@
 ####### Installing necessary R packages for data reprocessing and interference ##############
 
 packages <- c( "readr", "dplyr", "tidyr", "lubridate",'data.table',"terra", "reshape2",
-               'scales','doParallel','caret','vip','ggplot2','knitr')
+               'scales','doParallel','caret','vip','ggplot2','knitr','grid','gridExtra')
 
 #installed_packages <- packages %in% rownames(installed.packages())
 #if (any(installed_packages == FALSE)) {
@@ -11,7 +11,7 @@ packages <- c( "readr", "dplyr", "tidyr", "lubridate",'data.table',"terra", "res
 
 invisible(lapply(packages, library, character.only = TRUE))
 
-rm(installed_packages, packages)
+#rm(installed_packages, packages)
 
 
 ##### Loading preprocessed input data for the interference ######################
@@ -59,11 +59,12 @@ registerDoParallel(cl)
 
 # This loop performs parallel forecasting for each basin and each forecast issue date demanded in the submission template
 
-PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret','tidyr','lubridate','vip','ggplot2'))%dopar%{
+PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret','tidyr','lubridate','vip','ggplot2',"gridExtra", "grid"))%dopar%{
   basin<-basins[i]  # Select current basin for processing
   
   ISSUES<-list()  # List to store results for each forecast issue date
   PLOTS_S <- list() #List to store visuals explaining each forecast
+  
   
   # Loop through each forecast issue date
   for(d in 1:length(issue_dates)){
@@ -279,7 +280,8 @@ PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret
     issue_results$predictors<-paste(colnames(train),collapse=" ")
     issue_results$obs_train<-nrow(train)
     
- 
+    ISSUES[[d]]<-issue_results  # Append the results to the list for this basin and issue date
+    
     
     ######## Explainability ########
     
@@ -346,14 +348,23 @@ PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret
              lastwy=year_forecast) %>% 
       select(-c(forecast_year,SWE,precipitation_cumulative))
     
-    # Merge historic, current, and last year SWE and precipitation data
+    # Merge historic, current, and last year SWE and precipitation data, and arrange by day of water year
     historical_wy<-historical_wy %>% 
       left_join(current_wy) %>% 
-      left_join(last_wy)
+      left_join(last_wy) %>% 
+      mutate(
+        dowy = case_when(
+          month >= 10 ~ (month - 10) * 30 + day,  # For October, November, December
+          month < 10 ~ (month + 2) * 30 + day     # For January to September
+        )
+      ) %>% 
+      arrange(dowy)
     
     # Rearrange data to align with water year day (dowy)
-    historical_wy<-rbind(historical_wy[c(213:304),],historical_wy[c(1:212),])
-    historical_wy$dowy<-seq(1,304,1)
+    # historical_wy<-rbind(historical_wy[c(213:304),],historical_wy[c(1:212),])
+    # historical_wy$dowy<-seq(1,304,1)
+    
+    
     
     # Generate a plot of SWE data with historic range and current year comparison
     plot_snowpack<-ggplot(historical_wy, aes(dowy, SWE_mean)) +
@@ -382,12 +393,12 @@ PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret
         axis.text = element_text(size = 13))
     
     # Generate a plot of precipitation data with historic range and current year comparison
-    plot_PRCP<-ggplot(historical_wy, aes(dowy, PRCP_mean)) +
+    plot_PRCP <- ggplot(historical_wy, aes(dowy, PRCP_mean)) +
       geom_ribbon(aes(ymin = PRCP_min, ymax = PRCP_max, fill = "historic max-min"), alpha = 0.75) +
       geom_ribbon(aes(ymin = PRCP_L, ymax = PRCP_H, fill = "historic IQR"), alpha = 1) +
       geom_smooth(aes(color = "1990-2022 median"), method = "loess", span = 0.2, linetype = "dashed") +
-      geom_line(aes(y = PRCP_lastwy, color = "previous WY"),lwd=1) +
-      geom_line(aes(y = PRCP_current, color = "current WY"),lwd=1) +
+      geom_line(aes(y = PRCP_lastwy, color = "previous WY"), lwd = 1) +
+      geom_line(aes(y = PRCP_current, color = "current WY"), lwd = 1) +
       labs(x = "Day of Water Year", y = "(in)") +
       scale_color_manual(values = c("previous WY" = "orange", "current WY" = "red", 
                                     "1990-2022 median" = "gray30"),
@@ -397,18 +408,20 @@ PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret
       guides(color = guide_legend(override.aes = list(fill = NA)),
              linetype = guide_legend(override.aes = list(fill = NA))) +
       theme_minimal() +
-      labs(title="Figure 2. Accumulated precipitation",
-           subtitle = paste(basin,',','issue date:',issue_date,sep=' '))+
+      labs(title = "Figure 2. Accumulated precipitation",
+           subtitle = paste(basin, ',', 'issue date:', issue_date, sep = ' ')) +
       theme(
         legend.position = "right",
-        legend.key = element_rect(fill = "white", color = 'white'),
-        legend.key.size = unit(2, "lines"),  # Adjust legend symbol size
-        legend.text = element_text(size = 12),  # Adjust legend font size
-        legend.title = element_text(size = 12),
-        plot.title = element_text(size = 15),  
+        legend.key.size = unit(0.7, "lines"),  
+        legend.text = element_text(size = 12),  
+        legend.title = element_text(size = 10),  
+        plot.title = element_text(size = 15),
         plot.subtitle = element_text(size = 12), 
         axis.title = element_text(size = 14), 
-        axis.text = element_text(size = 13))
+        axis.text = element_text(size = 13),
+        plot.margin = margin(t = 10, r = 10, b = 10, l = 10)  
+      )
+    
     
     # Calculate SWE and precipitation normals
     issue_results$SWE_normals<-historical_wy %>% 
@@ -526,30 +539,54 @@ PREDICTED<- foreach(i=1:length(basins),.combine='c',.packages = c("dplyr",'caret
         axis.title = element_text(size = 14), 
         axis.text = element_text(size = 13))
     
-    # Append the outputs into the lists
-    ISSUES[[d]]<-issue_results
-    PLOTS_S[[d]] <- list(plot_snowpack, plot_PRCP,plot_antecedent, plot_importance)
+    # Filter results to the desired columns
+    results_table <- issue_results %>%
+      select(site_id, volume_10, volume_50, volume_90, historic_mean, previous_WY)
     
+    # Define the list of plots
+    plots <- list(
+      snowpack = plot_snowpack,
+      precipitation = plot_PRCP,
+      antecedent_flow = plot_antecedent,
+      importance = plot_importance
+    )
+    
+    # Writing each forecast as a pdf file 
+    pdf_filename <- paste0("reports/", basin, "_", issue_date, ".pdf")
+    
+    
+    pdf(pdf_filename, width = 11, height = 9.5)  
+    
+    #  Title 
+    title_grob <- textGrob(
+      paste("Seasonal water supply forecast for", basin, "\nIssue date:", issue_date),
+      gp = gpar(fontsize = 16, fontface = "bold"),
+      just = "top"
+    )
+    
+    # Converting the results table to a grob
+    table_grob <- tableGrob(results_table)
+    
+    # Arranging everything on one page
+    grid.arrange(
+      title_grob,
+      arrangeGrob(
+        plots$snowpack, plots$precipitation,
+        plots$antecedent_flow, plots$importance,
+        ncol = 2, nrow = 2
+      ),
+      table_grob,
+      nrow = 3,
+      heights = c(0.2, 0.6, 0.2)  
+    )
+    
+    
+    dev.off()
     
     
   }    
-  list(ISSUES, PLOTS_S)
   
+  ISSUES
   
 }
 
-
-# PREDICTED lists forecast summaries for each basin and forecast date. We can either download or aceess them instaneously.
-# For example, the forecast summary for Pueblo basin:
-
-FORECAST_SUMMARY <- PREDICTED[[1]] %>% 
-  bind_rows() %>% 
-  select(site_id, forecast_year, forecast_issue, volume_10, volume_50,volume_90,historic_mean, previous_WY)
-
-kable(FORECAST_SUMMARY, format = "pipe",  padding = 0)
-
-# Explanatory graphs for the forecast 2023-03-15
-PREDICTED[[2]][[1]][[1]]
-PREDICTED[[2]][[1]][[2]]
-PREDICTED[[2]][[1]][[3]]
-PREDICTED[[2]][[1]][[4]]
