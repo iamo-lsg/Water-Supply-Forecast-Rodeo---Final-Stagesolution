@@ -93,7 +93,7 @@ To run the R script, you should first **cd** into the **solution/** directory.
 
 SNOTEL and SWANN Data will be used by the code. The data are from approved sources with python code for downloading. As our solution is in R, we seperated the download steps and the main training steps. The data used is in our GitHub repository (https://github.com/iamo-lsg/Water-Supply-Forecast-Rodeo-Final-Stage-solution) 
 
-We downloaded the SWANN data manually from the official website given above. The SNOTEL data was downloaded with the **wsfr_download** tool (https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime/tree/main/data_download) provided by DRIVENDATA, where the config file **download_snotel.yml** is used.
+We downloaded the SWANN data manually from the official website given above. The SNOTEL data was downloaded with the **wsfr_download** tool (https://github.com/drivendataorg/water-supply-forecast-rodeo-runtime/tree/main/data_download) provided by the organizers, where the config file **download_snotel.yml** is used.
 
 ### SNOTEL Station Selection 
  
@@ -110,7 +110,7 @@ Run in a terminal
 
   Rscript FINAL_24092024_2.R
 
-Several intermediate files are save in the directory **explain/**, which will be used for the explainability communication run.
+Several intermediate files will be saved in the directory **explain/**, which will be used for the explainability communication run.
 
 ## Explainability Communication
 
