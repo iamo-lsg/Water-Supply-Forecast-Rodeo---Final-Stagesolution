@@ -99,7 +99,7 @@ We downloaded the SWANN data manually from the official website given above. The
  
 Run in a terminal
 
-  Rscript basin_snotel_selection.R
+  Rscript select_snotel_station.R 
 
 will produce a file **selected_snotel_meta.csv** in the **data/** directory
  
